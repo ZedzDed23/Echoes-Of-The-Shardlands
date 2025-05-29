@@ -1,0 +1,37 @@
+{
+  "player": {
+    "stats": {
+      "health": 100,
+      "max_health": 100,
+      "attack": 10,
+      "defense": 5
+    },
+    "memory_shards": 0
+  },
+  "upgrades": {
+    "max_health": {
+      "name": "Increased Vitality",
+      "description": "Increase maximum health by 20",
+      "cost": 100,
+      "value": 20,
+      "purchased": 0,
+      "max_purchases": 5
+    },
+    "attack": {
+      "name": "Enhanced Strike",
+      "description": "Increase attack damage by 5",
+      "cost": 150,
+      "value": 5,
+      "purchased": 0,
+      "max_purchases": 3
+    },
+    "defense": {
+      "name": "Hardened Shell",
+      "description": "Increase defense by 3",
+      "cost": 125,
+      "value": 3,
+      "purchased": 0,
+      "max_purchases": 3
+    }
+  }
+}
