@@ -1,15 +1,32 @@
 from typing import Dict, List, Optional
-from entities import Player, Room, Stats, Item
+from entities import Player, Room, Stats, Item, NPC
 from world_gen import WorldGenerator
 from combat import CombatSystem
 from events import EventSystem
 from utils import print_colored, get_input, clear_screen, Fore, roll_dice, format_command_help
+from dialogue_data import dialogues
+from palette import SOLAR_GOLD, SUNBEAM_YELLOW, ANCIENT_STONE_GREY, RUSTIC_BROWN, FAE_PINK # Import NPC color
 import os
 import json
 import random
 import pygame # Added for Pygame functionalities
 
 # Define room visual properties
+
+# ROOM_COLOR = (50, 50, 50)  # Old room color, to be removed or repurposed
+ROOM_RECT = pygame.Rect(100, 100, 600, 400)  # Centered 600x400 in 800x600 window
+FLOOR_COLOR = ANCIENT_STONE_GREY
+WALL_COLOR = RUSTIC_BROWN
+WALL_BORDER_THICKNESS = 5
+
+# Define player visual properties
+PLAYER_BASE_COLOR = SOLAR_GOLD # Updated to use palette color
+PLAYER_SIZE = 30
+PLAYER_SPEED = 5 # Player movement speed
+
+# Define NPC visual properties
+NPC_BASE_COLOR = FAE_PINK # Updated to use palette color
+NPC_SIZE = 30
 ROOM_COLOR = (50, 50, 50)  # Dark grey
 ROOM_RECT = pygame.Rect(100, 100, 600, 400)  # Centered 600x400 in 800x600 window
 
@@ -32,6 +49,35 @@ class GameManager:
         self.player_rect = pygame.Rect(0, 0, PLAYER_SIZE, PLAYER_SIZE)
         self.player_rect.centerx = ROOM_RECT.centerx
         self.player_rect.centery = ROOM_RECT.centery
+
+
+        # Player Animation
+        self.current_player_color = PLAYER_BASE_COLOR
+        self.player_animation_timer = 0
+        self.player_animation_frame = 0
+        self.player_animation_speed = 30  # Time between frames, higher is slower
+        self.player_pulse_colors = [SOLAR_GOLD, SUNBEAM_YELLOW]
+
+        # Game State
+        self.current_game_state: str = 'playing' # Possible states: 'playing', 'dialogue', 'combat', 'menu'
+        self.active_npc: Optional[NPC] = None
+        self.active_npc_rect: Optional[pygame.Rect] = None
+        self.current_dialogue_node_id: Optional[str] = None # For tracking current dialogue state
+
+        # Pygame Font and Dialogue UI constants
+        pygame.font.init() # Initialize the font module
+        self.dialogue_font = pygame.font.Font(None, 28)
+        self.dialogue_option_font = pygame.font.Font(None, 24)
+        self.DIALOGUE_TEXT_COLOR = (230, 230, 230)
+        self.DIALOGUE_BG_COLOR = (30, 30, 70)
+        self.DIALOGUE_BOX_RECT = pygame.Rect(50, 400, 700, 180)
+
+
+        # NPC Management
+        self.npcs_in_room: List[NPC] = [] # Stores NPC data objects for the current room
+        self.npc_rects: List[pygame.Rect] = [] # Stores NPC pygame.Rect objects for drawing
+        
+        self._load_npcs_for_current_room() # Load NPCs for the starting room
         
         self.memory_forge_upgrades = self._initialize_upgrades()
         # Game statistics
@@ -637,6 +683,183 @@ class GameManager:
         # self.main_menu() # Main menu is text-based, will be replaced/integrated with Pygame later
 
     def draw_current_room(self, surface: pygame.Surface) -> None:
+        """Draws the current room with floor and wall border onto the given Pygame surface."""
+        if self.current_room:
+            # Draw Floor
+            pygame.draw.rect(surface, FLOOR_COLOR, ROOM_RECT)
+            # Draw Walls (Border)
+            pygame.draw.rect(surface, WALL_COLOR, ROOM_RECT, WALL_BORDER_THICKNESS)
+            # Later, we can add more details like room type, name, etc.
+            # font = pygame.font.Font(None, 36)
+            # text = font.render(f"Room: {self.current_room.room_type}", True, (255, 255, 255)) # Use palette.LIGHT_TEXT
+            # text_rect = text.get_rect(center=(ROOM_RECT.centerx, ROOM_RECT.top + 30))
+            # surface.blit(text, text_rect)
+
+    def draw_player(self, surface: pygame.Surface) -> None:
+        """Draws the player onto the given Pygame surface."""
+        pygame.draw.rect(surface, self.current_player_color, self.player_rect)
+
+    def update_player_animation(self):
+        """Updates the player's idle animation."""
+        if self.current_game_state == 'playing': # Only animate when playing
+            self.player_animation_timer += 1
+            if self.player_animation_timer >= self.player_animation_speed:
+                self.player_animation_timer = 0
+                self.player_animation_frame = (self.player_animation_frame + 1) % len(self.player_pulse_colors)
+                self.current_player_color = self.player_pulse_colors[self.player_animation_frame]
+
+    def draw_npcs(self, surface: pygame.Surface):
+        """Draws all NPCs in the current room."""
+        for npc_rect in self.npc_rects:
+            pygame.draw.rect(surface, NPC_BASE_COLOR, npc_rect) # Use NPC_BASE_COLOR for now
+
+    def attempt_npc_interaction(self):
+        """Attempts to initiate dialogue with an NPC if player collides and presses interact key."""
+        if self.current_game_state != 'playing':
+            return # Only allow interaction if in 'playing' state
+
+        for i, npc_rect in enumerate(self.npc_rects):
+            if self.player_rect.colliderect(npc_rect):
+                self.active_npc = self.npcs_in_room[i]
+                self.active_npc_rect = npc_rect
+                self.current_game_state = 'dialogue'
+                self.current_dialogue_node_id = self.active_npc.dialogue_id # Start dialogue
+                print(f"Started dialogue with {self.active_npc.name} (ID: {self.current_dialogue_node_id})")
+                break # Interact with the first NPC found
+
+    def _load_npcs_for_current_room(self):
+        """Clears and populates NPC lists based on the current room."""
+        self.npcs_in_room.clear()
+        self.npc_rects.clear()
+
+        if self.current_room and self.current_room.npcs:
+            for i, npc_data in enumerate(self.current_room.npcs):
+                self.npcs_in_room.append(npc_data)
+                # Simple sequential placement for now to avoid overlap
+                # Position them starting from a point and offset each subsequent NPC
+                # Ensure they are within ROOM_RECT boundaries
+                npc_x = ROOM_RECT.left + 50 + (i * (NPC_SIZE + 20)) # Start 50px in, add space between NPCs
+                npc_y = ROOM_RECT.centery 
+                
+                # Basic check to prevent NPCs from being drawn too far to the right if many
+                if npc_x + NPC_SIZE > ROOM_RECT.right - 20: # Keep 20px margin from right
+                    # This simple logic might stack them if too many; more complex layout needed for many NPCs
+                    npc_x = ROOM_RECT.right - NPC_SIZE - 20 
+                    npc_y += NPC_SIZE + 5 # Move to next "row" (simplified)
+
+                npc_rect = pygame.Rect(npc_x, npc_y, NPC_SIZE, NPC_SIZE)
+                npc_rect.centery = ROOM_RECT.centery # Keep them vertically centered for now
+                
+                # Ensure it's within the main room rect, adjust if necessary
+                npc_rect.clamp_ip(ROOM_RECT)
+
+                self.npc_rects.append(npc_rect)
+                print(f"Loaded NPC: {npc_data.name} at {npc_rect.topleft}")
+
+# Helper function for text wrapping (can be moved to utils.py later)
+def render_text_wrapped(surface, text, font, color, rect, aa=False, bkg=None):
+    lines = text.splitlines()
+    y = rect.top
+    for line in lines:
+        while line:
+            i = 1
+            # determine if the row of text will be outside our area
+            if y + font.size(line)[1] > rect.bottom - 5: # Added a small margin
+                break
+            # determine maximum width of line
+            while font.size(line[:i])[0] < rect.width - 10 and i < len(line): # Added a small margin
+                i += 1
+            # if we've wrapped the text, then adjust the wrap to the last word      
+            if i < len(line): 
+                i = line.rfind(" ", 0, i) + 1
+            if i == 0: # Handles case where a single word is longer than the line width
+                i = len(line) 
+            # render the line and blit it to the surface
+            image = font.render(line[:i], aa, color, bkg)
+            surface.blit(image, (rect.left + 5, y)) # Added small left padding
+            y += font.size(line[:i])[1]
+            line = line[i:]
+    return y
+
+
+    def handle_dialogue(self, surface: pygame.Surface, events: list):
+        """Handles the display and interaction of dialogue."""
+        if not self.active_npc or not self.current_dialogue_node_id or self.current_dialogue_node_id not in dialogues:
+            self.current_game_state = 'playing'
+            self.active_npc = None
+            self.active_npc_rect = None
+            self.current_dialogue_node_id = None
+            return
+
+        node = dialogues[self.current_dialogue_node_id]
+        npc_text = node['npc_text']
+        player_options = node['player_options']
+
+        # Display Dialogue Box
+        pygame.draw.rect(surface, self.DIALOGUE_BG_COLOR, self.DIALOGUE_BOX_RECT)
+        
+        # Display NPC Text (wrapped)
+        npc_text_rect = pygame.Rect(
+            self.DIALOGUE_BOX_RECT.x + 10, 
+            self.DIALOGUE_BOX_RECT.y + 10,
+            self.DIALOGUE_BOX_RECT.width - 20, # Adjust width for padding
+            self.DIALOGUE_BOX_RECT.height // 2 - 20 # Allocate roughly half height for NPC text
+        )
+        last_y = render_text_wrapped(surface, npc_text, self.dialogue_font, self.DIALOGUE_TEXT_COLOR, npc_text_rect, aa=True)
+
+        # Display Player Options
+        option_start_y = last_y + 10 # Start options below NPC text
+        if option_start_y < self.DIALOGUE_BOX_RECT.y + self.DIALOGUE_BOX_RECT.height // 2: # Ensure options start at least mid-box
+            option_start_y = self.DIALOGUE_BOX_RECT.y + self.DIALOGUE_BOX_RECT.height // 2
+
+        for i, option in enumerate(player_options):
+            option_text = f"{i+1}. {option['text']}"
+            option_surface = self.dialogue_option_font.render(option_text, True, self.DIALOGUE_TEXT_COLOR)
+            option_pos_y = option_start_y + i * (self.dialogue_option_font.get_height() + 5)
+            
+            # Basic check to prevent options from overflowing the dialogue box
+            if option_pos_y + self.dialogue_option_font.get_height() > self.DIALOGUE_BOX_RECT.bottom - 10:
+                break 
+            
+            surface.blit(option_surface, (self.DIALOGUE_BOX_RECT.x + 15, option_pos_y))
+
+        # Handle Input for Option Selection
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if pygame.K_1 <= event.key <= pygame.K_0 + len(player_options):
+                    selected_option_index = -1
+                    if event.key == pygame.K_1: selected_option_index = 0
+                    elif event.key == pygame.K_2: selected_option_index = 1
+                    elif event.key == pygame.K_3: selected_option_index = 2
+                    elif event.key == pygame.K_4: selected_option_index = 3
+                    elif event.key == pygame.K_5: selected_option_index = 4
+                    # Add more if you expect more than 5 options, or use a loop
+                    
+                    if 0 <= selected_option_index < len(player_options):
+                        chosen_option = player_options[selected_option_index]
+
+                        if chosen_option.get('action') == 'end_dialogue':
+                            self.current_game_state = 'playing'
+                            self.active_npc = None
+                            self.active_npc_rect = None
+                            self.current_dialogue_node_id = None
+                            return # Exit immediately
+                        elif 'next_node' in chosen_option:
+                            self.current_dialogue_node_id = chosen_option['next_node']
+                            # If the next node doesn't exist, it will be caught at the start of this func
+                        # Add other actions here, e.g., 'start_quest'
+                        break # Processed one key press for dialogue
+
+
+    def move_player(self, direction: str) -> None:
+        """Moves the player rectangle, handles room transitions, and ensures it stays within ROOM_RECT."""
+        if self.current_game_state != 'playing':
+            return # Disable player movement if not in 'playing' state
+
+            
+        # self.main_menu() # Main menu is text-based, will be replaced/integrated with Pygame later
+
+    def draw_current_room(self, surface: pygame.Surface) -> None:
         """Draws the current room onto the given Pygame surface."""
         if self.current_room:
             pygame.draw.rect(surface, ROOM_COLOR, ROOM_RECT)
@@ -652,6 +875,7 @@ class GameManager:
 
     def move_player(self, direction: str) -> None:
         """Moves the player rectangle, handles room transitions, and ensures it stays within ROOM_RECT."""
+
         if direction == 'left':
             self.player_rect.x -= PLAYER_SPEED
         elif direction == 'right':
@@ -667,6 +891,9 @@ class GameManager:
                 self.current_room = self.current_room.connections['west']
                 self.player_rect.right = ROOM_RECT.right - PLAYER_SPEED 
                 self.current_room.visited = True
+
+                self._load_npcs_for_current_room() # Load NPCs for new room
+
                 print(f"Moved to room in the west. New room type: {self.current_room.room_type}")
                 return
         elif self.player_rect.right >= ROOM_RECT.right and 'east' in self.current_room.connections:
@@ -674,6 +901,7 @@ class GameManager:
                 self.current_room = self.current_room.connections['east']
                 self.player_rect.left = ROOM_RECT.left + PLAYER_SPEED
                 self.current_room.visited = True
+                self._load_npcs_for_current_room() # Load NPCs for new room
                 print(f"Moved to room in the east. New room type: {self.current_room.room_type}")
                 return
         elif self.player_rect.top <= ROOM_RECT.top and 'north' in self.current_room.connections:
@@ -681,6 +909,9 @@ class GameManager:
                 self.current_room = self.current_room.connections['north']
                 self.player_rect.bottom = ROOM_RECT.bottom - PLAYER_SPEED
                 self.current_room.visited = True
+
+                self._load_npcs_for_current_room() # Load NPCs for new room
+  
                 print(f"Moved to room in the north. New room type: {self.current_room.room_type}")
                 return
         elif self.player_rect.bottom >= ROOM_RECT.bottom and 'south' in self.current_room.connections:
@@ -688,6 +919,8 @@ class GameManager:
                 self.current_room = self.current_room.connections['south']
                 self.player_rect.top = ROOM_RECT.top + PLAYER_SPEED
                 self.current_room.visited = True
+                self._load_npcs_for_current_room() # Load NPCs for new room
+ 
                 print(f"Moved to room in the south. New room type: {self.current_room.room_type}")
                 return
 

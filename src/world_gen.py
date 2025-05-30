@@ -1,6 +1,6 @@
 import random
 from typing import Dict, List, Optional, Tuple
-from entities import Room, Enemy, Item, Stats
+from entities import Room, Enemy, Item, Stats, NPC # Added NPC import
 from utils import chance
 
 class WorldGenerator:
@@ -243,6 +243,16 @@ class WorldGenerator:
             room.items = [self.generate_item(random.choice(rarities)) for _ in range(num_items)]
         elif room_type == 'event':
             room.event_id = f"event_{random.randint(1, 5)}"
+            # Chance to spawn an NPC in an event room
+            if chance(0.3): # 30% chance
+                npc_stats = Stats(health=100, max_health=100, attack=0, defense=0)
+                # Using "sage_intro" which we defined in dialogue_data.py
+                new_npc = NPC(name="Mysterious Stranger", 
+                              stats=npc_stats, 
+                              dialogue_id="sage_intro", 
+                              sprite_id="stranger_type_1") # Added sprite_id
+                room.npcs.append(new_npc)
+                print(f"Spawned NPC '{new_npc.name}' (Sprite: {new_npc.sprite_id}) in an event room.") # Debug print
             
         return room
     

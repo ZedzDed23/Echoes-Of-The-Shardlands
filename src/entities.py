@@ -114,6 +114,7 @@ class Room:
     event_id: Optional[str] = None
     visited: bool = False
     connections: Dict[str, 'Room'] = field(default_factory=dict)  # direction: room
+    npcs: List['NPC'] = field(default_factory=list) # List of NPCs in the room
     
     def add_connection(self, direction: str, room: 'Room') -> None:
         self.connections[direction] = room
@@ -121,4 +122,10 @@ class Room:
         reverse_dir = {'north': 'south', 'south': 'north', 
                       'east': 'west', 'west': 'east'}
         if direction in reverse_dir:
-            room.connections[reverse_dir[direction]] = self 
+            room.connections[reverse_dir[direction]] = self
+
+@dataclass
+class NPC(Entity): # Inherits name and stats from Entity
+    dialogue_id: str = "" # ID to link to dialogue data
+    sprite_id: Optional[str] = None # For future sprite rendering
+    # NPC-specific fields can be added here later
