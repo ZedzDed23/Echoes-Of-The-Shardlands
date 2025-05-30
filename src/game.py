@@ -12,6 +12,7 @@ import random
 import pygame # Added for Pygame functionalities
 
 # Define room visual properties
+
 # ROOM_COLOR = (50, 50, 50)  # Old room color, to be removed or repurposed
 ROOM_RECT = pygame.Rect(100, 100, 600, 400)  # Centered 600x400 in 800x600 window
 FLOOR_COLOR = ANCIENT_STONE_GREY
@@ -26,6 +27,13 @@ PLAYER_SPEED = 5 # Player movement speed
 # Define NPC visual properties
 NPC_BASE_COLOR = FAE_PINK # Updated to use palette color
 NPC_SIZE = 30
+ROOM_COLOR = (50, 50, 50)  # Dark grey
+ROOM_RECT = pygame.Rect(100, 100, 600, 400)  # Centered 600x400 in 800x600 window
+
+# Define player visual properties
+PLAYER_COLOR = (0, 150, 200)  # A shade of blue
+PLAYER_SIZE = 30
+PLAYER_SPEED = 5 # Player movement speed
 
 class GameManager:
     def __init__(self):
@@ -41,6 +49,7 @@ class GameManager:
         self.player_rect = pygame.Rect(0, 0, PLAYER_SIZE, PLAYER_SIZE)
         self.player_rect.centerx = ROOM_RECT.centerx
         self.player_rect.centery = ROOM_RECT.centery
+
 
         # Player Animation
         self.current_player_color = PLAYER_BASE_COLOR
@@ -847,6 +856,26 @@ def render_text_wrapped(surface, text, font, color, rect, aa=False, bkg=None):
         if self.current_game_state != 'playing':
             return # Disable player movement if not in 'playing' state
 
+            
+        # self.main_menu() # Main menu is text-based, will be replaced/integrated with Pygame later
+
+    def draw_current_room(self, surface: pygame.Surface) -> None:
+        """Draws the current room onto the given Pygame surface."""
+        if self.current_room:
+            pygame.draw.rect(surface, ROOM_COLOR, ROOM_RECT)
+            # Later, we can add more details like room type, name, etc.
+            # font = pygame.font.Font(None, 36)
+            # text = font.render(f"Room: {self.current_room.room_type}", True, (255, 255, 255))
+            # text_rect = text.get_rect(center=(ROOM_RECT.centerx, ROOM_RECT.top + 30))
+            # surface.blit(text, text_rect)
+
+    def draw_player(self, surface: pygame.Surface) -> None:
+        """Draws the player onto the given Pygame surface."""
+        pygame.draw.rect(surface, PLAYER_COLOR, self.player_rect)
+
+    def move_player(self, direction: str) -> None:
+        """Moves the player rectangle, handles room transitions, and ensures it stays within ROOM_RECT."""
+
         if direction == 'left':
             self.player_rect.x -= PLAYER_SPEED
         elif direction == 'right':
@@ -862,7 +891,9 @@ def render_text_wrapped(surface, text, font, color, rect, aa=False, bkg=None):
                 self.current_room = self.current_room.connections['west']
                 self.player_rect.right = ROOM_RECT.right - PLAYER_SPEED 
                 self.current_room.visited = True
+
                 self._load_npcs_for_current_room() # Load NPCs for new room
+
                 print(f"Moved to room in the west. New room type: {self.current_room.room_type}")
                 return
         elif self.player_rect.right >= ROOM_RECT.right and 'east' in self.current_room.connections:
@@ -878,7 +909,9 @@ def render_text_wrapped(surface, text, font, color, rect, aa=False, bkg=None):
                 self.current_room = self.current_room.connections['north']
                 self.player_rect.bottom = ROOM_RECT.bottom - PLAYER_SPEED
                 self.current_room.visited = True
+
                 self._load_npcs_for_current_room() # Load NPCs for new room
+  
                 print(f"Moved to room in the north. New room type: {self.current_room.room_type}")
                 return
         elif self.player_rect.bottom >= ROOM_RECT.bottom and 'south' in self.current_room.connections:
@@ -887,6 +920,7 @@ def render_text_wrapped(surface, text, font, color, rect, aa=False, bkg=None):
                 self.player_rect.top = ROOM_RECT.top + PLAYER_SPEED
                 self.current_room.visited = True
                 self._load_npcs_for_current_room() # Load NPCs for new room
+ 
                 print(f"Moved to room in the south. New room type: {self.current_room.room_type}")
                 return
 
