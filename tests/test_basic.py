@@ -60,7 +60,9 @@ def test_world_generation():
     # Test room connections
     for room in all_rooms:
         # Each room should have at least one connection (except if randomly removed)
-        assert room.room_type in ['combat', 'treasure', 'event']
+        valid_types = ['combat', 'treasure', 'event', 'merchant', 'rest_area', 'library',
+                       'mini_boss']
+        assert room.room_type in valid_types
         
         # Test room content based on type
         if room.room_type == 'combat':
@@ -69,6 +71,10 @@ def test_world_generation():
             assert len(room.items) in [1, 2, 3]  # 1-3 items per treasure room
         elif room.room_type == 'event':
             assert room.event_id is not None
+        elif room.room_type == 'merchant':
+            assert len(room.items) >= 1  # merchant always has stock
+        elif room.room_type == 'library':
+            assert len(room.items) in [1, 2]  # 1-2 items in library
 
 def test_combat():
     """Test basic combat functionality."""

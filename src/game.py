@@ -3,9 +3,12 @@ from entities import Player, Room, Stats, Item, NPC
 from world_gen import WorldGenerator
 from combat import CombatSystem
 from events import EventSystem
-from utils import print_colored, get_input, clear_screen, Fore, roll_dice, format_command_help
+from utils import (print_colored, get_input, clear_screen, Fore, roll_dice,
+                   format_command_help, print_separator, print_room_header,
+                   print_event_header)
 from dialogue_data import dialogues
-from palette import SOLAR_GOLD, SUNBEAM_YELLOW, ANCIENT_STONE_GREY, RUSTIC_BROWN, FAE_PINK # Import NPC color
+from palette import (SOLAR_GOLD, SUNBEAM_YELLOW, ANCIENT_STONE_GREY, RUSTIC_BROWN,
+                     FAE_PINK, MOSSY_GREEN, DIM_STONE, FADED_GOLD)
 import os
 import json
 import random
@@ -293,18 +296,22 @@ class GameManager:
                     self.player_entity.memory_shards += bonus
                     print_colored(f"Quick Learner: +{bonus} Memory Shards!", Fore.YELLOW)
             
-            print_colored(f"\n=== {self.current_room.room_type.upper()} ROOM ===", Fore.CYAN, bold=True)
+            # ── Zork-style room header ────────────────────────────────────────
+            room_label = self.current_room.room_type.replace('_', ' ').title()
+            print_room_header(room_label)
             print(f"\n{self.current_room.description}")
-            print(f"\nYou: {self.player_entity}")
+            print(f"\n{self.player_entity}")
             
             # Show available directions
             available_exits = list(self.current_room.connections.keys())
             if available_exits:
-                print("\nAvailable exits:", ', '.join(available_exits))
+                print_colored("\nObvious exits: " + ", ".join(available_exits).upper(),
+                              Fore.GREEN)
             else:
-                print("\nNo exits available!")
+                print_colored("\nThere are no obvious exits.", Fore.YELLOW)
+            print_separator()
             
-            # Handle room based on type
+            # Handle room based on type (only on first visit)
             if not self.current_room.visited:
                 if self.current_room.room_type == 'combat' and self.current_room.enemies:
                     combat = CombatSystem(self.player_entity, self.current_room.enemies)
@@ -316,32 +323,44 @@ class GameManager:
                         self.enemies_defeated += len(combat.defeated_enemies)
                         # Handle loot
                         if loot:
-                            print("\nCollecting loot...")
+                            print_colored("\nYou search the area...", Fore.GREEN)
                             for item in loot:
                                 if self.player_entity.can_add_item():
                                     self.player_entity.add_item(item)
-                                    print_colored(f"Added {item.name} to inventory!", Fore.GREEN)
+                                    print_colored(f"  Taken: {item.name}", Fore.GREEN)
                                 else:
-                                    print_colored("Inventory full! Cannot pick up more items.", Fore.RED)
+                                    print_colored("Your pack is full — you cannot carry more.",
+                                                  Fore.YELLOW)
                                     break
                             input("\nPress Enter to continue...")
                         
                 elif self.current_room.room_type == 'treasure' and self.current_room.items:
-                    print("\nYou found items!")
+                    print_colored("\nGlittering objects lie waiting for you.", Fore.YELLOW)
                     for item in self.current_room.items:
                         if self.player_entity.can_add_item():
                             self.player_entity.add_item(item)
-                            print_colored(f"Added {item.name} to inventory!", Fore.GREEN)
+                            print_colored(f"  Taken: {item.name}", Fore.GREEN)
                         else:
-                            print_colored("Inventory full! Cannot pick up more items.", Fore.RED)
+                            print_colored("Your pack is full — you cannot carry more.",
+                                          Fore.YELLOW)
                             break
                             
                 elif self.current_room.room_type == 'event' and self.current_room.event_id:
-                    survived = self.event_system.handle_event(self.current_room.event_id, self.player_entity)
+                    survived = self.event_system.handle_event(
+                        self.current_room.event_id, self.player_entity)
                     if not survived:
                         self.handle_death()
                         return False  # Signal player death
-                        
+
+                elif self.current_room.room_type == 'merchant':
+                    self.handle_merchant_room()
+
+                elif self.current_room.room_type == 'rest_area':
+                    self.handle_rest_area()
+
+                elif self.current_room.room_type == 'library':
+                    self.handle_library_room()
+
                 self.current_room.visited = True
             
             # Available commands
@@ -354,7 +373,7 @@ class GameManager:
             
             # Get player action
             action = get_input(
-                f"\nWhat would you like to do? ({format_command_help(commands)})",
+                f"\nWhat do you do? ({format_command_help(commands)})",
                 valid_options=list(commands.keys()),
                 allow_compound=True
             )
@@ -366,14 +385,14 @@ class GameManager:
             
             if command == 'move':
                 if not available_exits:
-                    print_colored("No exits available!", Fore.RED)
+                    print_colored("There is nowhere to go.", Fore.YELLOW)
                     continue
                 
                 if args and args[0] in available_exits:
                     direction = args[0]
                 else:
                     direction = get_input(
-                        "Choose direction",
+                        "Which direction",
                         valid_options=available_exits
                     )
                 
@@ -480,10 +499,15 @@ class GameManager:
                 
     def show_status(self) -> None:
         """Display player status."""
-        print(f"\nHealth: {self.player_entity.stats.health}/{self.player_entity.stats.max_health}")
-        print(f"Attack: {self.player_entity.stats.attack}")
-        print(f"Defense: {self.player_entity.stats.defense}")
-        print(f"Memory Shards: {self.player_entity.memory_shards}")
+        print_separator()
+        print_colored("  ADVENTURER STATUS", Fore.GREEN, bold=True)
+        print_separator()
+        print(f"  Health:        {self.player_entity.stats.health}/{self.player_entity.stats.max_health}")
+        print(f"  Attack:        {self.player_entity.stats.attack}")
+        print(f"  Defense:       {self.player_entity.stats.defense}")
+        print(f"  Memory Shards: {self.player_entity.memory_shards}")
+        print_separator()
+        input("\nPress Enter to continue...")
         
     def _handle_easter_egg(self) -> None:
         """Handle the secret '137' input easter egg."""
@@ -514,10 +538,15 @@ class GameManager:
         """Display and handle the main menu."""
         while True:
             clear_screen()
-            print_colored("\n=== ECHOES OF THE SHARDLANDS ===", Fore.CYAN, bold=True)
-            print("\n1. New Run")
-            print("2. Memory Forge")
-            print("3. Quit")
+            print_colored("─" * 60, Fore.GREEN)
+            print_colored("   ECHOES OF THE SHARDLANDS", Fore.GREEN, bold=True)
+            print_colored("─" * 60, Fore.GREEN)
+            print_colored("\n  You stand at the threshold of the Shardlands.", Fore.GREEN)
+            print_colored("  Every journey ends. Every shard endures.\n", Fore.GREEN)
+            print("  1.  New Run")
+            print("  2.  Memory Forge")
+            print("  3.  Quit")
+            print_colored("─" * 60, Fore.GREEN)
             
             action = get_input(
                 "\nChoose action",
@@ -541,7 +570,9 @@ class GameManager:
         
     def handle_death(self) -> None:
         """Handle player death."""
-        print_colored("\nYou have been defeated!", Fore.RED, bold=True)
+        print_colored("\n─" * 60, Fore.RED)
+        print_colored("  YOU HAVE BEEN DEFEATED", Fore.RED, bold=True)
+        print_colored("─" * 60, Fore.RED)
         
         # Calculate Memory Shard rewards with bonuses
         rooms_explored = len([r for r in self.all_rooms if r.visited])
@@ -940,4 +971,123 @@ def render_text_wrapped(surface, text, font, color, rect, aa=False, bkg=None):
         print("  status         - View player status")
         print("  help           - Show this help text")
         print("\nTip: You can combine commands with arguments (e.g., 'move north')")
+        input("\nPress Enter to continue...")
+
+    # ── New room handlers ─────────────────────────────────────────────────────
+
+    def handle_merchant_room(self) -> None:
+        """Handle a merchant room encounter."""
+        print_event_header("Wandering Merchant")
+        print('\n"Ah, a customer. Browse as you like — my prices are fair for the Shardlands."\n')
+
+        stock = self.current_room.items
+        if not stock:
+            print_colored("The merchant's pack is empty. 'Sold out, I am afraid.'", Fore.YELLOW)
+            input("\nPress Enter to continue...")
+            return
+
+        while True:
+            print_colored(f"\nYour Memory Shards: {self.player_entity.memory_shards}", Fore.YELLOW)
+            print_colored("\nFor sale:", Fore.GREEN)
+            rarity_colors = {
+                'common': Fore.WHITE,
+                'uncommon': Fore.GREEN,
+                'rare': Fore.CYAN,
+                'legendary': Fore.MAGENTA
+            }
+            prices = []
+            for i, item in enumerate(stock, 1):
+                rarity_mult = {'common': 30, 'uncommon': 55, 'rare': 90, 'legendary': 200}
+                price = rarity_mult.get(item.rarity, 30)
+                prices.append(price)
+                color = rarity_colors.get(item.rarity, Fore.WHITE)
+                print(f"  {i}. {color}{item.name}{Fore.RESET} — {item.description}  "
+                      f"[{price} shards]")
+
+            valid_opts = ['leave'] + [str(i) for i in range(1, len(stock) + 1)]
+            choice = get_input(
+                "\nBuy which item? (number or 'leave')",
+                valid_options=valid_opts
+            )
+
+            if choice == 'leave':
+                print_colored('\n"Safe travels." The merchant adjusts their hood.', Fore.GREEN)
+                break
+
+            idx = int(choice) - 1
+            price = prices[idx]
+            item = stock[idx]
+
+            if self.player_entity.memory_shards < price:
+                print_colored(
+                    f"\n\"That will cost {price} shards — you are {price - self.player_entity.memory_shards} short.\"",
+                    Fore.YELLOW
+                )
+            elif not self.player_entity.can_add_item():
+                print_colored("\nYour pack is full — you cannot carry that.", Fore.YELLOW)
+            else:
+                self.player_entity.memory_shards -= price
+                self.player_entity.add_item(item)
+                stock.pop(idx)
+                prices.pop(idx)
+                print_colored(f"\n\"A fine choice.\"  Taken: {item.name}  (-{price} shards)",
+                              Fore.GREEN)
+                if not stock:
+                    print_colored("\n\"That is everything I had. Good luck out there.\"",
+                                  Fore.YELLOW)
+                    break
+
+        input("\nPress Enter to continue...")
+
+    def handle_rest_area(self) -> None:
+        """Handle a rest-area room."""
+        print_event_header("Safe Haven")
+        print("\nThe tension leaves your body the moment you step inside.")
+        print("This place is quiet and, for now, secure.\n")
+
+        # Heal the player
+        missing_hp = self.player_entity.stats.max_health - self.player_entity.stats.health
+        heal_amount = max(10, int(self.player_entity.stats.max_health * 0.35))
+        heal_amount = min(heal_amount, missing_hp)
+
+        if heal_amount > 0:
+            self.player_entity.stats.heal(heal_amount)
+            print_colored(f"> You rest briefly and recover {heal_amount} HP.", Fore.GREEN)
+        else:
+            print_colored("> You are already at full health.", Fore.GREEN)
+
+        # Small shard bonus for taking a breather
+        shard_bonus = roll_dice(5, 15)
+        self.player_entity.memory_shards += shard_bonus
+        print_colored(f"> While resting you notice {shard_bonus} Memory Shards "
+                      f"embedded in the floor.", Fore.YELLOW)
+
+        input("\nPress Enter to continue...")
+
+    def handle_library_room(self) -> None:
+        """Handle a library / archive room."""
+        print_event_header("Ancient Archive")
+        print("\nThe dust stirs as you move between the shelves.")
+        print("Someone — or something — spent a great deal of care preserving this knowledge.\n")
+
+        items = self.current_room.items
+        shard_bonus = roll_dice(10, 30)
+        self.player_entity.memory_shards += shard_bonus
+        print_colored(f"> Studying the texts earns you {shard_bonus} Memory Shards "
+                      f"of insight.", Fore.YELLOW)
+
+        if items:
+            print_colored("\n> Tucked between volumes you discover:", Fore.GREEN)
+            for item in items:
+                if self.player_entity.can_add_item():
+                    self.player_entity.add_item(item)
+                    print_colored(f"  Taken: {item.name}", Fore.GREEN)
+                else:
+                    print_colored("  Your pack is full — you leave the rest behind.",
+                                  Fore.YELLOW)
+                    break
+        else:
+            print_colored("\n> The shelves yield only knowledge — nothing portable.",
+                          Fore.YELLOW)
+
         input("\nPress Enter to continue...")
