@@ -7,7 +7,16 @@ class WorldGenerator:
     def __init__(self, depth: int = 5, width: int = 5):
         self.depth = depth
         self.width = width
-        self.room_types = ['combat', 'treasure', 'event']
+        # Weighted room type pool: combat=35%, treasure=20%, event=25%,
+        # merchant=8%, rest_area=7%, library=5%
+        self.room_type_pool = (
+            ['combat'] * 35 +
+            ['treasure'] * 20 +
+            ['event'] * 25 +
+            ['merchant'] * 8 +
+            ['rest_area'] * 7 +
+            ['library'] * 5
+        )
         self.directions = ['north', 'south', 'east', 'west']
         self.mini_boss_defeated = 0  # Track number of mini-bosses defeated
         self.next_mini_boss = random.randint(10, 15)  # Next mini-boss floor
@@ -197,31 +206,110 @@ class WorldGenerator:
             rarity=rarity,
             durability=random.randint(3, 5) if chance(0.3) else None
         )
+
+    def generate_merchant_stock(self, difficulty: int) -> List[Item]:
+        """Generate a small set of items for a merchant to sell."""
+        stock = []
+        rarities = ['common', 'common', 'uncommon', 'rare']
+        if difficulty >= 3:
+            rarities.append('rare')
+        if difficulty >= 5:
+            rarities.append('legendary')
+        for _ in range(random.randint(3, 5)):
+            rarity = random.choice(rarities)
+            stock.append(self.generate_item(rarity))
+        return stock
     
     def generate_room_description(self, room_type: str) -> str:
-        """Generate a description for a room based on its type."""
+        """Generate a Zork-style description for a room based on its type."""
         descriptions = {
             'combat': [
-                "A dark chamber echoes with distant growls.",
-                "Crystal formations cast eerie shadows on the walls.",
-                "The air crackles with hostile energy."
+                "You are in a low-ceilinged chamber. The walls are slick with an iridescent "
+                "residue that catches the light. Something breathes in the far corner.",
+                "A wide hall of shattered crystal columns. Shards crunch underfoot. "
+                "Hostile shapes detach themselves from the shadows.",
+                "The passage opens into a vaulted cavern. The air smells of hot iron "
+                "and charged stone. Enemies stir at your approach.",
+                "Crude claw-marks score every surface here, as if something has been "
+                "trapped and desperate for a very long time. You are not alone.",
+                "A circular pit room, its floor caked in dried shard-dust. "
+                "The silence is wrong — too deliberate.",
+                "Thick crystal growths crowd the walls, humming at a frequency "
+                "that sets your teeth on edge. Movement flickers in their depths.",
             ],
             'treasure': [
-                "Glittering shards catch your eye in the corners.",
-                "A peaceful sanctuary filled with crystalline formations.",
-                "Ancient pedestals hold mysterious artifacts."
+                "You are in a small alcove. Dust motes hang motionless in the still air. "
+                "Something glitters on the stone ledge ahead.",
+                "A collapsed storeroom: ancient crates burst open, their contents "
+                "scattered across the floor and glowing faintly.",
+                "An antechamber of polished obsidian, clearly undisturbed for ages. "
+                "Crystalline pedestals hold items of obvious value.",
+                "Rivulets of liquid light seep from cracks in the ceiling, pooling "
+                "around what appears to be abandoned loot.",
+                "You discover a nook behind a false wall. It is dry here, "
+                "and the floor is littered with Memory Shards and forgotten goods.",
+                "A low chamber filled with the soft hum of stored energy. "
+                "Sealed containers line the walls, many still intact.",
             ],
             'event': [
-                "Strange symbols pulse with an inner light.",
-                "The air shimmers with potential possibilities.",
-                "Time seems to flow differently in this space."
-            ]
+                "Strange symbols pulse with an inner light on every surface. "
+                "The air vibrates with latent possibility.",
+                "Time seems to flow differently here — seconds stretch, "
+                "and you notice details that should be invisible.",
+                "The chamber is perfectly circular and perfectly silent. "
+                "Something here wants to be found.",
+                "Threads of crystallised memory drift through the air like slow-motion snow. "
+                "They part around you, curious.",
+                "The geometry of the room shifts subtly when you are not looking directly at it. "
+                "You feel the presence of a choice.",
+                "A thin haze of blue light obscures the far wall. "
+                "The haze carries the distant echo of a voice.",
+            ],
+            'merchant': [
+                "You are in a surprisingly well-lit grotto. Lanterns of polished quartz "
+                "hang from iron hooks. A cloaked figure sits behind a low stone counter, "
+                "surrounded by carefully arranged wares.",
+                "A makeshift stall occupies a niche in the corridor — canvas stretched "
+                "over stalagmites, goods arrayed on a velvet-covered slab. "
+                "The proprietor looks up as you approach.",
+                "The passage widens into a natural alcove smelling of candle wax and cedar. "
+                "Someone has made this into a very tidy shop.",
+                "Coloured crystal chips mark the boundary of a small trading post. "
+                "A hooded figure acknowledges you with a nod and gestures to the display.",
+            ],
+            'rest_area': [
+                "You find a sheltered hollow, warm and dry, far from the worst of the dark. "
+                "A small fire-crystal provides steady orange light. "
+                "This is a safe place — for now.",
+                "A natural spring trickles down one wall into a clean basin. "
+                "Carved benches, worn smooth, ring the pool. "
+                "The tension in your shoulders eases.",
+                "An old campsite: a ring of soot-stained stones, a few dry logs, "
+                "and someone's abandoned bedroll. The silence here is peaceful.",
+                "The corridor opens into a domed chamber with excellent acoustics. "
+                "Crystal formations glow softly. You feel no immediate danger.",
+                "A narrow cave lined with smooth river-stones. A slow thermal vent "
+                "keeps the air warm. Rest here, traveller.",
+            ],
+            'library': [
+                "Row upon row of crystal tablets line the walls, each etched with dense script. "
+                "The dust is thick but the writing is legible. "
+                "This is the archive of something — or someone.",
+                "A forgotten reading room: low shelves of stone tablets, "
+                "a petrified wooden chair, and a lectern still bearing an open volume.",
+                "The chamber is cool and dry. Sealed niches protect rolled scrolls "
+                "of crystallised membrane. The knowledge here is very old.",
+                "Carvings cover every centimetre of wall, floor to ceiling: maps, diagrams, "
+                "and dense annotations. You feel richer just standing here.",
+                "A scriptorum carved into living rock. Dried ink, stylus grooves "
+                "in the stone benches, and shelves of archival tablets await examination.",
+            ],
         }
         return random.choice(descriptions[room_type])
     
     def generate_room(self, difficulty: int) -> Room:
         """Generate a single room with appropriate content."""
-        room_type = random.choice(self.room_types)
+        room_type = random.choice(self.room_type_pool)
         description = self.generate_room_description(room_type)
         
         room = Room(room_type=room_type, description=description)
@@ -242,7 +330,7 @@ class WorldGenerator:
             rarities = ['common'] * 6 + ['uncommon'] * 3 + ['rare'] * 1
             room.items = [self.generate_item(random.choice(rarities)) for _ in range(num_items)]
         elif room_type == 'event':
-            room.event_id = f"event_{random.randint(1, 5)}"
+            room.event_id = f"event_{random.randint(1, 13)}"
             # Chance to spawn an NPC in an event room
             if chance(0.3): # 30% chance
                 npc_stats = Stats(health=100, max_health=100, attack=0, defense=0)
@@ -252,7 +340,14 @@ class WorldGenerator:
                               dialogue_id="sage_intro", 
                               sprite_id="stranger_type_1") # Added sprite_id
                 room.npcs.append(new_npc)
-                print(f"Spawned NPC '{new_npc.name}' (Sprite: {new_npc.sprite_id}) in an event room.") # Debug print
+        elif room_type == 'merchant':
+            room.items = self.generate_merchant_stock(difficulty)
+        elif room_type == 'rest_area':
+            pass  # No pre-placed content; handled by game logic
+        elif room_type == 'library':
+            num_items = random.randint(1, 2)
+            rarities = ['common'] * 4 + ['uncommon'] * 4 + ['rare'] * 2
+            room.items = [self.generate_item(random.choice(rarities)) for _ in range(num_items)]
             
         return room
     
@@ -349,4 +444,191 @@ class WorldGenerator:
             effect_type=item_data['effect_type'],
             effect_value=item_data['effect_value'],
             rarity='legendary'
-        ) 
+        )
+        
+    def get_enemy_abilities(self, enemy_type: str, difficulty: int) -> List[str]:
+        """Get special abilities for an enemy based on type and difficulty."""
+        base_abilities = {
+            'Shard Golem': ['attack'],  # Tank
+            'Crystal Spider': ['attack'],  # Glass cannon
+            'Shadow Wraith': ['attack'],  # Balanced damage
+            'Memory Eater': ['attack'],  # Balanced+
+            'Void Stalker': ['attack'],  # Strong all around
+        }
+        
+        # Special abilities unlocked at higher difficulties
+        special_abilities = {
+            'Shard Golem': {
+                3: ['attack', 'shield'],  # Gains temporary defense boost
+                5: ['attack', 'shield', 'regenerate'],  # Heals over time
+            },
+            'Crystal Spider': {
+                3: ['attack', 'double_strike'],  # Two attacks in one turn
+                5: ['attack', 'double_strike', 'poison'],  # DoT effect
+            },
+            'Shadow Wraith': {
+                3: ['attack', 'life_drain'],  # Damage + self heal
+                5: ['attack', 'life_drain', 'curse'],  # Reduces player defense
+            },
+            'Memory Eater': {
+                3: ['attack', 'confuse'],  # Chance to make player miss
+                5: ['attack', 'confuse', 'mind_blast'],  # High damage skill
+            },
+            'Void Stalker': {
+                3: ['attack', 'void_strike'],  # Ignores some defense
+                5: ['attack', 'void_strike', 'darkness'],  # Reduces player accuracy
+            }
+        }
+        
+        # Get the highest tier of abilities unlocked at current difficulty
+        abilities = base_abilities[enemy_type].copy()
+        for diff_req, diff_abilities in special_abilities[enemy_type].items():
+            if difficulty >= diff_req:
+                abilities = diff_abilities.copy()
+                
+        return abilities
+
+    def generate_mini_boss(self, difficulty: int) -> Enemy:
+        """Generate a mini-boss enemy with enhanced stats and abilities."""
+        mini_boss_types = [
+            # (name, health_mult, attack_mult, defense_mult, abilities)
+            ('Crystal Overlord', 2.0, 1.8, 1.5, 
+             ['attack', 'crystal_burst', 'summon_shards', 'overcharge']),
+            ('Void Harbinger', 1.8, 2.0, 1.3, 
+             ['attack', 'void_explosion', 'shadow_clone', 'death_mark']),
+            ('Memory Sovereign', 1.7, 1.7, 1.7, 
+             ['attack', 'mind_shatter', 'temporal_shift', 'essence_drain']),
+        ]
+        
+        name, health_mult, attack_mult, defense_mult, abilities = random.choice(mini_boss_types)
+        
+        # Mini-boss stats scale even higher than normal enemies
+        base_stats = {
+            'health': int(50 * (difficulty ** 1.6) * health_mult),
+            'attack': int(15 * (difficulty ** 1.4) * attack_mult),
+            'defense': int(5 * (difficulty ** 1.3) * defense_mult)
+        }
+        
+        # Less random variation for mini-bosses to ensure consistent challenge
+        variation = 0.05 + (difficulty * 0.01)
+        for stat in base_stats:
+            base_stats[stat] = int(base_stats[stat] * random.uniform(1 - variation, 1 + variation))
+            
+        base_stats['max_health'] = base_stats['health']
+        stats = Stats(**base_stats)
+        
+        # Mini-bosses have guaranteed better loot
+        loot_table = {
+            'health_potion': 1.0,  # Guaranteed health potion
+            'damage_crystal': 0.8,
+            'legendary_item': 0.3  # Chance for legendary item
+        }
+        
+        return Enemy(
+            name=f"Mini-Boss: {name} (Lvl {difficulty})",
+            stats=stats,
+            level=difficulty,
+            attack_pattern=abilities,
+            loot_table=loot_table,
+            experience_value=difficulty * 25,  # More XP than regular enemies
+            is_mini_boss=True
+        )
+        
+    def generate_enemy(self, difficulty: int) -> Enemy:
+        """Generate an enemy based on difficulty level."""
+        # Apply mini-boss difficulty scaling
+        scaled_difficulty = difficulty + self.mini_boss_defeated  # Each mini-boss increases effective difficulty
+        
+        enemy_types = [
+            # (name, health_mult, attack_mult, defense_mult, rarity)
+            ('Shard Golem',    1.2, 1.0, 1.4, 'common'),
+            ('Crystal Spider', 0.8, 1.3, 0.7, 'common'),
+            ('Shadow Wraith',  1.0, 1.2, 0.8, 'uncommon'),
+            ('Memory Eater',   1.1, 1.1, 1.0, 'uncommon'),
+            ('Void Stalker',   1.3, 1.4, 1.1, 'rare')
+        ]
+        
+        # Select enemy type, with higher difficulties favoring stronger enemies
+        if scaled_difficulty >= 3 and chance(0.3):
+            possible_types = [e for e in enemy_types if e[4] == 'rare']
+        elif scaled_difficulty >= 2 and chance(0.5):
+            possible_types = [e for e in enemy_types if e[4] in ['uncommon', 'rare']]
+        else:
+            possible_types = enemy_types
+            
+        name, health_mult, attack_mult, defense_mult, _ = random.choice(possible_types)
+        
+        # Base stats scale exponentially with difficulty
+        base_stats = {
+            'health': int(25 * (scaled_difficulty ** 1.5) * health_mult),
+            'attack': int(8 * (scaled_difficulty ** 1.3) * attack_mult),
+            'defense': int(3 * (scaled_difficulty ** 1.2) * defense_mult)
+        }
+        
+        # Add random variation
+        variation = 0.1 + (scaled_difficulty * 0.02)
+        for stat in base_stats:
+            base_stats[stat] = int(base_stats[stat] * random.uniform(1 - variation, 1 + variation))
+        
+        # Ensure minimum stats
+        base_stats['health'] = max(15, base_stats['health'])
+        base_stats['attack'] = max(5, base_stats['attack'])
+        base_stats['defense'] = max(1, base_stats['defense'])
+        base_stats['max_health'] = base_stats['health']
+        
+        stats = Stats(**base_stats)
+        
+        # Get abilities based on enemy type and difficulty
+        abilities = self.get_enemy_abilities(name, scaled_difficulty)
+        
+        # Higher difficulty enemies have better loot chances
+        loot_table = {
+            'health_potion': 0.3 + (scaled_difficulty * 0.05),
+            'damage_crystal': 0.2 + (scaled_difficulty * 0.05)
+        }
+        
+        return Enemy(
+            name=f"Lvl {scaled_difficulty} {name}",
+            stats=stats,
+            level=scaled_difficulty,
+            attack_pattern=abilities,
+            loot_table=loot_table,
+            experience_value=scaled_difficulty * 10
+        )
+    
+    def generate_item(self, rarity: str = 'common') -> Item:
+        """Generate a random item with given rarity."""
+        rarity_multiplier = {
+            'common': 1.0,
+            'uncommon': 1.5,
+            'rare': 2.0,
+            'legendary': 3.0
+        }
+        
+        item_types = [
+            ('Health Potion', 'heal', 20, 'restores {} health'),
+            ('Damage Crystal', 'damage', 15, 'deals up to {} damage'),
+            ('Shield Shard', 'defense', 5, 'temporarily grants {} defense'),
+            ('Power Fragment', 'attack', 3, 'temporarily grants {} attack')
+        ]
+        
+        name_base, effect_type, base_value, desc_template = random.choice(item_types)
+        value = int(base_value * rarity_multiplier[rarity])
+        
+        # Adjust description based on effect type
+        if effect_type in ['attack', 'defense']:
+            target = 'self'
+        else:
+            target = 'target'
+            
+        description = f"A {rarity} item that {desc_template.format(value)} to {target}"
+        
+        return Item(
+            name=f"{rarity.capitalize()} {name_base}",
+            description=description,
+            effect_type=effect_type,
+            effect_value=value,
+            rarity=rarity,
+            durability=random.randint(3, 5) if chance(0.3) else None
+        )
+ 

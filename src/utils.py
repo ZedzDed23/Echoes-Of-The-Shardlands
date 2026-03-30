@@ -102,4 +102,31 @@ def format_command_help(commands: Dict[str, List[str]]) -> str:
             help_text.append(f"{cmd} [{'/'.join(subcmds)}]")
         else:
             help_text.append(cmd)
-    return ', '.join(help_text) 
+    return ', '.join(help_text)
+
+
+# ── Zork-style UI helpers ─────────────────────────────────────────────────────
+
+_SEPARATOR_CHAR = '─'
+_SEPARATOR_WIDTH = 60
+
+def print_separator(color: str = Fore.GREEN) -> None:
+    """Print a horizontal rule in the Zork terminal style."""
+    print_colored(_SEPARATOR_CHAR * _SEPARATOR_WIDTH, color)
+
+
+def print_room_header(title: str, room_type: str = '') -> None:
+    """Print a Zork-style room header with title and optional type tag."""
+    print_colored(_SEPARATOR_CHAR * _SEPARATOR_WIDTH, Fore.GREEN)
+    type_tag = f"  [{room_type.upper()}]" if room_type else ''
+    header_text = f"  {title.upper()}{type_tag}"
+    print_colored(header_text, Fore.GREEN, bold=True)
+    print_colored(_SEPARATOR_CHAR * _SEPARATOR_WIDTH, Fore.GREEN)
+
+
+def print_event_header(title: str) -> None:
+    """Print a highlighted event/encounter header."""
+    border = '═' * _SEPARATOR_WIDTH
+    print_colored(border, Fore.YELLOW)
+    print_colored(f"  *** {title.upper()} ***", Fore.YELLOW, bold=True)
+    print_colored(border, Fore.YELLOW) 
